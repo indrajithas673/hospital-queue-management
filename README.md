@@ -147,6 +147,7 @@ Tested with Apache JMeter:
 
 ## 📁 Project Structure
 
+```
 hospital-queue/
 ├── docker-compose.yml
 ├── README.md
@@ -225,6 +226,7 @@ hospital-queue/
             ├── TrackToken.jsx         ← Public token tracking (no login)
             ├── WaitingRoomDisplay.jsx ← TV waiting room board (/display/:department)
             └── NotFound.jsx           ← 404 page with Go Back + Dashboard buttons
+```            
 ---
 
 ## 🚀 Getting Started
