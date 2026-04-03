@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const {
   createDoctor, createPatient, getAllDoctors, getAllPatients,
   toggleDoctorAvailability, toggleMyAvailability, getDoctorsByDepartment,
@@ -9,7 +10,7 @@ const { protect, authorize } = require('../middleware/auth');
 
 const userLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 200,
-  keyGenerator: (req, res) => req.user ? req.user._id.toString() : require('express-rate-limit').ipKeyGenerator(req, res),
+  keyGenerator: (req) => req.user ? req.user._id.toString() : ipKeyGenerator(req),
   message: { success: false, message: 'Too many requests. Please slow down.' },
 });
 
