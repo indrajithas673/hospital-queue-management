@@ -297,12 +297,6 @@ Tested with Apache JMeter:
 
 ---
 
-## 📄 License
-
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
 <div align="center">
 Built by Indrajith AS · B.E. Information Science · CMR Institute of Technology, Bengaluru
 </div>
