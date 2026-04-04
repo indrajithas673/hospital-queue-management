@@ -6,26 +6,26 @@ import { validateLoginForm } from '../utils/validate';
 const Login = () => {
   const [form, setForm]         = useState({ email: '', password: '' });
   const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);  
   const [showPass, setShowPass] = useState(false);
-  const { login, loading }      = useAuth();
+  const { login }               = useAuth();
   const navigate                = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    
-    const errors = validateLoginForm(form);
-    if (errors.length > 0) { setError(errors[0]); return; }
-
-    const result = await login(form.email, form.password);
-    if (result.success) {
-      if (result.role === 'patient') navigate('/patient');
-      else if (result.role === 'doctor') navigate('/doctor');
-      else if (result.role === 'admin') navigate('/admin');
-    } else {
-      setError(result.message);
-    }
-  };
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  const validationErrors = validateLoginForm(form);
+  if (validationErrors.length > 0) { setError(validationErrors[0]); return; }
+  setLoading(true);
+  const result = await login(form.email, form.password);
+  setLoading(false);
+  if (result.success) {
+    if (result.role === 'patient') navigate('/patient');
+    else if (result.role === 'doctor') navigate('/doctor');
+    else if (result.role === 'admin') navigate('/admin');
+  } else {
+    setError(result.message);
+  }
+};
 
   return (
     <div style={S.page}>
@@ -76,7 +76,7 @@ const Login = () => {
             <div style={S.field}>
               <label style={S.label}>Email address</label>
               <input style={S.input} type="email" placeholder="you@hospital.com"
-                value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+                value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
             </div>
 
             <div style={S.field}>
@@ -84,7 +84,7 @@ const Login = () => {
               <div style={{ position: 'relative' }}>
                 <input style={{ ...S.input, paddingRight: '44px' }}
                   type={showPass ? 'text' : 'password'} placeholder="••••••••"
-                  value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
+                  value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
                 <button type="button" style={S.eyeBtn} onClick={() => setShowPass(!showPass)}>
                   {showPass ? '🙈' : '👁️'}
                 </button>
@@ -92,7 +92,7 @@ const Login = () => {
             </div>
 
             <button style={{ ...S.btn, opacity: loading ? 0.75 : 1 }} type="submit" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In →'}
+  {           loading ? 'Signing in...' : 'Sign In →'}
             </button>
           </form>
 
