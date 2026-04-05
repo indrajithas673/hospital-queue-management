@@ -37,18 +37,58 @@ const registerAppointment = async (req, res) => {
     const { doctorId, department, priority, priorityReason, symptoms } = req.body;
     if (!doctorId || !department) return res.status(400).json({ success: false, message: 'doctorId and department are required.' });
 
+    // Attack 4 — Patient cannot self-register as P1 Emergency
+    if (Number(priority) === 1) {
+      return res.status(403).json({ success: false, message: 'Emergency registration must be done by a doctor or admin.' });
+    }
+
     const doctor = await User.findOne({ _id: doctorId, role: 'doctor', department, isAvailable: true });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found or unavailable.' });
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
 
+    // Check for existing appointment in SAME department only
+    // Multi-dept booking is allowed (for ON_HOLD demo)
     const existing = await Appointment.findOne({
       patient: req.user._id,
+      department,
       status: { $in: ['WAITING', 'IN_CONSULTATION', 'ON_HOLD'] },
       appointmentDate: { $gte: today, $lt: tomorrow },
     });
-    if (existing) return res.status(400).json({ success: false, message: `You already have an active appointment (Token: ${existing.tokenNumber}) in ${existing.department}. Cancel it first.` });
+    if (existing) return res.status(400).json({ success: false, message: `You already have an active appointment in ${department} (Token: ${existing.tokenNumber}). Cancel it first.` });
+
+    // Attack 9 — NO_SHOW re-register block
+    const noShow = await Appointment.findOne({
+      patient: req.user._id,
+      department,
+      status: 'NO_SHOW',
+      appointmentDate: { $gte: today, $lt: tomorrow },
+    });
+    if (noShow) return res.status(400).json({ success: false, message: 'You were marked No Show for this department today. Please contact the front desk.' });
+
+    // Attack 3 — Cancel cooldown (10 minutes)
+    const recentCancel = await Appointment.findOne({
+      patient: req.user._id,
+      department,
+      status: 'CANCELLED',
+      appointmentDate: { $gte: today, $lt: tomorrow },
+      updatedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
+    });
+    if (recentCancel) {
+      const waitSecs = Math.ceil((10 * 60 * 1000 - (Date.now() - new Date(recentCancel.updatedAt).getTime())) / 1000);
+      const waitMins = Math.ceil(waitSecs / 60);
+      return res.status(400).json({ success: false, message: `Please wait ${waitMins} minute(s) before re-registering in ${department}.` });
+    }
+
+    // Attack 13 — Doctor queue cap (max 50 appointments per day)
+    const todayCount = await Appointment.countDocuments({
+      doctor: doctorId,
+      appointmentDate: { $gte: today, $lt: tomorrow },
+    });
+    if (todayCount >= 50) {
+      return res.status(400).json({ success: false, message: "This doctor's queue is full for today (50 max). Please choose another doctor." });
+    }
 
     const appointment = await Appointment.create({
       patient: req.user._id, doctor: doctorId, department,
@@ -142,7 +182,7 @@ const getDepartmentQueue = async (req, res) => {
     const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
 
     const queue = await Appointment.find({
-      department, status: { $in: ['WAITING', 'IN_CONSULTATION'] },
+      department, status: { $in: ['WAITING', 'IN_CONSULTATION', 'ON_HOLD'] },
       appointmentDate: { $gte: today, $lt: tomorrow },
     }).populate('patient', 'name phone email').populate('doctor', 'name').sort({ priority: 1, createdAt: 1 });
 
@@ -299,16 +339,22 @@ const autoAssignDoctor = async (req, res) => {
     const { department, priority, priorityReason, symptoms } = req.body;
     if (!department) return res.status(400).json({ success: false, message: 'Department is required.' });
 
+    // Attack 4 — Patient cannot self-register as P1 Emergency
+    if (Number(priority) === 1) {
+      return res.status(403).json({ success: false, message: 'Emergency registration must be done by a doctor or admin.' });
+    }
+
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Check no active appointment already
+    // Check no active appointment in SAME department
     const existing = await Appointment.findOne({
       patient: req.user._id,
+      department,
       status: { $in: ['WAITING', 'IN_CONSULTATION'] },
       appointmentDate: { $gte: today, $lt: tomorrow },
     });
-    if (existing) return res.status(400).json({ success: false, message: `You already have an active appointment (Token: ${existing.tokenNumber}). Cancel it first.` });
+    if (existing) return res.status(400).json({ success: false, message: `You already have an active appointment in ${department} (Token: ${existing.tokenNumber}). Cancel it first.` });
 
     // Get all available doctors in department
     const doctors = await User.find({ role: 'doctor', department, isAvailable: true });
