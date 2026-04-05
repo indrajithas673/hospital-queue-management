@@ -20,24 +20,25 @@ const Toggle = ({ checked, onChange, label }) => (
 
 // Feature 2 — Consultation timer
 const ConsultationTimer = ({ startTime }) => {
-  const [elapsed, setElapsed] = useState(0);
+  const start = new Date(startTime).getTime();
+  const [elapsed, setElapsed] = useState(Math.floor((Date.now() - start) / 1000));
 
   useEffect(() => {
-    const start = new Date(startTime).getTime();
     const interval = setInterval(() => {
       setElapsed(Math.floor((Date.now() - start) / 1000));
     }, 1000);
     return () => clearInterval(interval);
   }, [startTime]);
 
-  const mins = Math.floor(elapsed / 60);
+  const hours = Math.floor(elapsed / 3600);
+  const mins = Math.floor((elapsed % 3600)/ 60);
   const secs = elapsed % 60;
   const isLong = elapsed > 600; // warn after 10 minutes
 
   return (
     <div style={{ ...S.timer, background: isLong ? '#fef2f2' : '#f0fdf4', color: isLong ? '#dc2626' : '#16a34a' }}>
       <span style={S.timerIcon}>{isLong ? '⚠️' : '⏱'}</span>
-      <span style={S.timerText}>{String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}</span>
+      <span style={S.timerText}>{String(hours).padStart(2, '0')}:{String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}</span>
       <span style={S.timerLabel}>consultation time</span>
     </div>
   );
@@ -87,7 +88,7 @@ const DoctorDashboard = () => {
     socket.emit('join_admin');
 
     const handleQueueUpdate = (data) => {
-      if (data.department === user.department) { setQueue(data.queue); fetchHistory(); }
+      if (data.department === user.department) { fetchQueue(); fetchHistory(); }
     };
     const handleDoctorUpdate = (data) => {
       if (data.doctorId.toString() === user._id.toString()) setIsAvailable(data.isAvailable);
@@ -292,7 +293,7 @@ const DoctorDashboard = () => {
               {onHoldQueue.length > 0 && (
                 <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #e2e8f0' }}>
                   <div style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px' }}>
-                    ⏸ On Hold — In consultation at another department
+                    ⏸ On Hold
                   </div>
                   {onHoldQueue.map(appt => {
                     const p = PRIORITY[appt.priority];

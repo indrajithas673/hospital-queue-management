@@ -36,40 +36,50 @@ const startScheduler = (io) => {
     } catch (err) { console.error('❌ Midnight reset failed:', err.message); }
   }, { timezone: 'Asia/Kolkata' });
 
-  // ── Auto-escalation — runs every 5 minutes ──
+  // ── Auto-escalation — runs every minute ──
   // Attack 15 — Only escalate if notifiedAt3 = true
   // This means patient was near their turn — confirms they were physically present
   // Prevents patients who booked early and went home from getting unfair upgrades
-  cron.schedule('*/5 * * * *', async () => {
-    try {
-      const sixtyMinutesAgo = new Date(Date.now() - 60 * 60 * 1000);
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  // NOTE: Threshold set to 5 min for demo purposes (production = 60 min)
+cron.schedule('* * * * *', async () => {
+  try {
+    const thresholdAgo = new Date(Date.now() - 5 * 60 * 1000);// 5 min for demo
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const escalated = await Appointment.find({
-        status: 'WAITING',
-        priority: 3,
-        createdAt: { $lte: sixtyMinutesAgo },
-        notifiedAt3: true, // Attack 15 — only escalate if they were near their turn
-        appointmentDate: { $gte: today, $lt: tomorrow },
+    const escalated = await Appointment.find({
+      status: 'WAITING',
+      priority: 3,
+      createdAt: { $lte: thresholdAgo },
+      appointmentDate: { $gte: today, $lt: tomorrow },
+    });
+
+    if (escalated.length === 0) return;
+
+    const { recalculateQueue } = require('./queueEngine');
+
+    for (const appt of escalated) {
+      appt.priority = 2;
+      appt.priorityReason = 'Auto-escalated — waiting too long';
+      await appt.save();
+      console.log(`⬆️  Auto-escalated ${appt.tokenNumber} P3 → P2`);
+
+      // Recalculate so doctor dashboard updates in real time
+      const updatedQueue = await recalculateQueue(appt.department, appt.doctor);
+      io.to(appt.department).emit('queue_updated', {
+        department: appt.department,
+        queue: updatedQueue,
+        timestamp: new Date().toISOString(),
       });
+    }
 
-      if (escalated.length === 0) return;
-
-      for (const appt of escalated) {
-        appt.priority = 2;
-        appt.priorityReason = 'Auto-escalated — waiting over 60 minutes';
-        await appt.save();
-        console.log(`⬆️  Auto-escalated ${appt.tokenNumber} P3 → P2`);
-      }
-
-      const depts = [...new Set(escalated.map(a => a.department))];
-      depts.forEach(dept => io.to(dept).emit('priority_escalated', {
-        department: dept,
-        count: escalated.filter(a => a.department === dept).length,
-      }));
-    } catch (err) { console.error('❌ Auto-escalation error:', err.message); }
-  });
+    const depts = [...new Set(escalated.map(a => a.department))];
+    depts.forEach(dept => io.to(dept).emit('priority_escalated', {
+      department: dept,
+      count: escalated.filter(a => a.department === dept).length,
+    }));
+  } catch (err) { console.error('❌ Auto-escalation error:', err.message); }
+});
 
   // Attack 1/11 — Step Away expiry — runs every minute
   // If patient stepped away > 15 min ago → move to back of their priority bucket
