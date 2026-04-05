@@ -9,7 +9,7 @@ const {
 const { protect, authorize } = require('../middleware/auth');
 
 const userLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 200,
+  windowMs: 15 * 60 * 10000, max: 100000,
   keyGenerator: (req) => req.user ? req.user._id.toString() : ipKeyGenerator(req),
   message: { success: false, message: 'Too many requests. Please slow down.' },
 });

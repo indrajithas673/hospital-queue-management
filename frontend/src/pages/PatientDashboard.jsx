@@ -3,21 +3,21 @@ import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import socket from '../utils/socket';
 import { validateAppointmentForm } from '../utils/validate';
-
+ 
 const DEPARTMENTS = ['General', 'Cardiology', 'Orthopedics', 'Neurology', 'Pediatrics', 'ENT'];
-
+ 
 const PRIORITY_OPTIONS = [
   { value: 3, label: '🟢 Normal',    sub: 'Regular appointment' },
   { value: 2, label: '🟡 Priority',  sub: 'Senior citizen, Pregnant, Disabled' },
   { value: 1, label: '🔴 Emergency', sub: 'Critical / Life threatening' },
 ];
-
+ 
 const PRIORITY = {
   1: { dot: '🔴', label: 'EMERGENCY', color: '#dc2626', bg: '#fff1f2', border: '#fca5a5', light: '#fff1f2' },
   2: { dot: '🟡', label: 'PRIORITY',  color: '#d97706', bg: '#fffbeb', border: '#fcd34d', light: '#fffbeb' },
   3: { dot: '🟢', label: 'Normal',    color: '#16a34a', bg: '#f0fdf4', border: '#86efac', light: '#f0fdf4' },
 };
-
+ 
 const STATUS = {
   WAITING:         { label: 'WAITING',         bg: '#f59e0b' },
   IN_CONSULTATION: { label: 'IN CONSULTATION', bg: '#2563eb' },
@@ -26,8 +26,7 @@ const STATUS = {
   NO_SHOW:         { label: 'NO SHOW',         bg: '#dc2626' },
   CANCELLED:       { label: 'CANCELLED',       bg: '#6b7280' },
 };
-
-// QR code using Google Charts API — no extra library needed
+ 
 const QRCode = ({ value, size = 120 }) => (
   <img
     src={`https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}`}
@@ -35,30 +34,23 @@ const QRCode = ({ value, size = 120 }) => (
     style={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
   />
 );
-
+ 
 const StarRating = ({ onRate }) => {
   const [hovered, setHovered] = useState(0);
   const [selected, setSelected] = useState(0);
-
-  const handleRate = async (star) => {
-    setSelected(star);
-    await onRate(star);
-  };
-
+  const handleRate = async (star) => { setSelected(star); await onRate(star); };
   return (
     <div style={{ display: 'flex', gap: '4px' }}>
       {[1, 2, 3, 4, 5].map(star => (
         <span key={star} style={{ fontSize: '24px', cursor: 'pointer', transition: 'transform 0.1s', transform: hovered >= star || selected >= star ? 'scale(1.2)' : 'scale(1)' }}
-          onMouseEnter={() => setHovered(star)}
-          onMouseLeave={() => setHovered(0)}
-          onClick={() => handleRate(star)}>
+          onMouseEnter={() => setHovered(star)} onMouseLeave={() => setHovered(0)} onClick={() => handleRate(star)}>
           {hovered >= star || selected >= star ? '⭐' : '☆'}
         </span>
       ))}
     </div>
   );
 };
-
+ 
 const PatientDashboard = () => {
   const { user } = useAuth();
   const [doctors, setDoctors]               = useState([]);
@@ -68,7 +60,7 @@ const PatientDashboard = () => {
   const [error, setError]                   = useState('');
   const [loading, setLoading]               = useState(false);
   const [cancelLoading, setCancelLoading]   = useState(null);
-  const [copied, setCopied]                 = useState(false);
+  const [copiedId, setCopiedId]             = useState(null);
   const [infoMsg, setInfoMsg]               = useState('');
   const [notifiedReturn, setNotifiedReturn]   = useState({});
   const [stepAwayLoading, setStepAwayLoading] = useState(null);
@@ -78,7 +70,7 @@ const PatientDashboard = () => {
   const [showQR, setShowQR]                 = useState(null);
   const [emergencyAlert, setEmergencyAlert] = useState('');
   const [ratedAppts, setRatedAppts]         = useState({});
-
+ 
   const fetchMyAppointments = useCallback(async () => {
     try {
       const res = await api.get('/appointments/my');
@@ -88,7 +80,7 @@ const PatientDashboard = () => {
       activeDepts.forEach(dept => socket.emit('join_department', dept));
     } catch (err) { console.error(err.message); }
   }, []);
-
+ 
   const fetchDeptLoads = useCallback(async () => {
     try {
       const res = await api.get('/analytics/department-summary');
@@ -97,39 +89,26 @@ const PatientDashboard = () => {
       setDeptLoads(loads);
     } catch {}
   }, []);
-
+ 
   useEffect(() => { fetchMyAppointments(); fetchDeptLoads(); }, [fetchMyAppointments, fetchDeptLoads]);
-
+ 
   useEffect(() => {
     if (error) { const t = setTimeout(() => setError(''), 4000); return () => clearTimeout(t); }
   }, [error]);
-
+ 
   useEffect(() => {
     if (emergencyAlert) { const t = setTimeout(() => setEmergencyAlert(''), 5000); return () => clearTimeout(t); }
   }, [emergencyAlert]);
-
+ 
   useEffect(() => {
     socket.emit('join_admin');
     socket.on('queue_updated', fetchMyAppointments);
     socket.on('doctor_updated', () => { if (form.department) fetchDoctors(form.department); });
-    // Feature 1 — Emergency broadcast listener
     socket.on('emergency_alert', (data) => { setEmergencyAlert(data.message); });
-    socket.on('appointment_on_hold', (data) => {
-      setInfoMsg(data.message);
-      setTimeout(() => setInfoMsg(''), 8000);
-    });
-    socket.on('appointment_resumed', (data) => {
-      setInfoMsg(data.message);
-      fetchMyAppointments();
-      setTimeout(() => setInfoMsg(''), 8000);
-    });
-    // Feature 5 — Auto-escalation notification
-    socket.on('priority_escalated', (data) => { fetchMyAppointments(); });
-    socket.on('step_away_expired', (data) => {
-      setInfoMsg(`⚠️ ${data.message}`);
-      fetchMyAppointments();
-      setTimeout(() => setInfoMsg(''), 8000);
-    });
+    socket.on('appointment_on_hold', (data) => { setInfoMsg(data.message); setTimeout(() => setInfoMsg(''), 8000); });
+    socket.on('appointment_resumed', (data) => { setInfoMsg(data.message); fetchMyAppointments(); setTimeout(() => setInfoMsg(''), 8000); });
+    socket.on('priority_escalated', () => { fetchMyAppointments(); });
+    socket.on('step_away_expired', (data) => { setInfoMsg(`⚠️ ${data.message}`); fetchMyAppointments(); setTimeout(() => setInfoMsg(''), 8000); });
     return () => {
       socket.off('queue_updated', fetchMyAppointments);
       socket.off('doctor_updated');
@@ -140,37 +119,33 @@ const PatientDashboard = () => {
       socket.off('priority_escalated');
     };
   }, [fetchMyAppointments, form.department]);
-
+ 
   const fetchDoctors = async (dept) => {
     try {
       const res = await api.get(`/admin/doctors/by-department/${dept}`);
       setDoctors(res.data.data.doctors);
     } catch { setDoctors([]); }
   };
-
+ 
   const handleDeptChange = (dept) => {
     setForm({ ...form, department: dept, doctorId: '' });
     setDoctors([]);
     if (dept) fetchDoctors(dept);
   };
-
+ 
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true); setError('');
     const errors = validateAppointmentForm(form);
     if (errors.length > 0) { setError(errors[0]); setLoading(false); return; }
     try {
-      let res;
       if (form.autoAssign) {
-        // Feature 10 — auto assign to least busy doctor
-        res = await api.post('/appointments/auto-assign', {
-          department: form.department,
-          priority: Number(form.priority),
-          priorityReason: form.priorityReason,
-          symptoms: form.symptoms,
+        await api.post('/appointments/auto-assign', {
+          department: form.department, priority: Number(form.priority),
+          priorityReason: form.priorityReason, symptoms: form.symptoms,
         });
       } else {
-        res = await api.post('/appointments/register', {
+        await api.post('/appointments/register', {
           doctorId: form.doctorId, department: form.department,
           priority: Number(form.priority), priorityReason: form.priorityReason, symptoms: form.symptoms,
         });
@@ -185,7 +160,7 @@ const PatientDashboard = () => {
       setError(err.response?.data?.message || 'Registration failed.');
     } finally { setLoading(false); }
   };
-
+ 
   const handleCancel = async () => {
     if (!confirmCancel) return;
     setCancelLoading(confirmCancel);
@@ -196,20 +171,30 @@ const PatientDashboard = () => {
     } catch (err) { setError(err.response?.data?.message || 'Cancellation failed.'); }
     finally { setCancelLoading(null); }
   };
-
-  const handleCopyLink = (tokenNumber) => {
+ 
+  const handleCopyLink = (apptId, tokenNumber) => {
     const url = `${window.location.origin}/track/${tokenNumber}`;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+    const onSuccess = () => { setCopiedId(apptId); setTimeout(() => setCopiedId(null), 2000); };
+    const fallback = () => {
+      try {
+        const el = document.createElement('textarea');
+        el.value = url;
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.focus(); el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        onSuccess();
+      } catch (e) { alert(`Copy this link: ${url}`); }
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(url).then(onSuccess).catch(fallback);
     } else {
-      const el = document.createElement('textarea');
-      el.value = url; document.body.appendChild(el); el.select();
-      document.execCommand('copy'); document.body.removeChild(el);
-      setCopied(true); setTimeout(() => setCopied(false), 2000);
+      fallback();
     }
   };
-
-  // Patient notifies doctor they are back — goes through backend for rate limiting
+ 
   const handleNotifyReturn = async (appt) => {
     try {
       await api.post(`/appointments/${appt._id}/notify-return`);
@@ -218,8 +203,7 @@ const PatientDashboard = () => {
       setError(err.response?.data?.message || 'Failed to notify doctor.');
     }
   };
-
-  // Patient steps away — pauses own position
+ 
   const handleStepAway = async (appt) => {
     setStepAwayLoading(appt._id);
     try {
@@ -230,34 +214,31 @@ const PatientDashboard = () => {
       setError(err.response?.data?.message || 'Failed to step away.');
     } finally { setStepAwayLoading(null); }
   };
-
+ 
   const handleRate = async (appointmentId, rating) => {
     try {
       await api.post(`/appointments/${appointmentId}/rate`, { rating });
       setRatedAppts(prev => ({ ...prev, [appointmentId]: rating }));
     } catch (err) { setError(err.response?.data?.message || 'Rating failed.'); }
   };
-
-  // Feature 3 — Estimated completion time
+ 
   const getEstimatedTime = (estimatedWaitMinutes) => {
     const now = new Date();
     now.setMinutes(now.getMinutes() + (estimatedWaitMinutes || 0));
     return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
-
+ 
   const activeAppts = myAppointments.filter(a => ['WAITING', 'IN_CONSULTATION', 'ON_HOLD'].includes(a.status));
   const pastAppts   = myAppointments.filter(a => ['DONE', 'NO_SHOW', 'CANCELLED'].includes(a.status));
-  // ON_HOLD appointments don't block new bookings in other departments
-  const hasActive = activeAppts.some(a => ['WAITING', 'IN_CONSULTATION'].includes(a.status));
+  const hasActive   = activeAppts.some(a => ['WAITING', 'IN_CONSULTATION'].includes(a.status));
   const activeDeptAppts = activeAppts.reduce((acc, a) => { acc[a.department] = a; return acc; }, {});
-
-  // Feature 4 — Department busy indicator
+ 
   const getBusyLabel = (count) => {
     if (count === 0) return { label: 'Available', color: '#16a34a', bg: '#f0fdf4' };
     if (count <= 5)  return { label: `${count} waiting`, color: '#d97706', bg: '#fffbeb' };
     return { label: `${count} waiting — Busy`, color: '#dc2626', bg: '#fff1f2' };
   };
-
+ 
   return (
     <div style={S.page}>
       <div style={S.pageHeader}>
@@ -265,31 +246,23 @@ const PatientDashboard = () => {
           <h1 style={S.pageTitle}>Patient Portal</h1>
           <p style={S.pageSub}>Welcome back, <strong>{user.name}</strong></p>
         </div>
-        {hasActive ? (
-          <div style={S.disabledBox}>
-            <div style={S.disabledIcon}>🔒</div>
-            <div>
-              <div style={S.disabledTitle}>Active appointment exists</div>
-              <div style={S.disabledSub}>Cancel current to book new</div>
-            </div>
-          </div>
+        {showForm ? (
+          <button style={{ ...S.newBtn, background: '#64748b' }}
+            onClick={() => setShowForm(false)}>
+            ✕ Close
+          </button>
         ) : (
-          <button style={{ ...S.newBtn, background: showForm ? '#64748b' : 'linear-gradient(135deg, #1d4ed8, #2563eb)' }}
-            onClick={() => setShowForm(!showForm)}>
-            {showForm ? '✕ Close' : '+ New Appointment'}
+          <button style={{ ...S.newBtn, background: 'linear-gradient(135deg, #1d4ed8, #2563eb)' }}
+            onClick={() => setShowForm(true)}>
+            + New Appointment
           </button>
         )}
       </div>
-
-      {/* Feature 1 — Emergency alert banner */}
-      {emergencyAlert && (
-        <div style={S.emergencyBanner}>
-          🚨 {emergencyAlert}
-        </div>
-      )}
-
+ 
+      {emergencyAlert && <div style={S.emergencyBanner}>🚨 {emergencyAlert}</div>}
       {error && <div style={S.errorBanner}><span>⚠</span> {error}</div>}
-
+      {infoMsg && <div style={{ ...S.errorBanner, background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe' }}>{infoMsg}</div>}
+ 
       {/* Active appointments */}
       {activeAppts.length > 0 && (
         <div style={S.section}>
@@ -318,7 +291,8 @@ const PatientDashboard = () => {
                     <span style={{ ...S.badge, background: s.bg }}>{s.label}</span>
                   </div>
                 </div>
-
+ 
+                {/* WAITING — show queue stats + all action buttons */}
                 {appt.status === 'WAITING' && (
                   <div style={S.activeCardBody}>
                     <div style={S.statsRow}>
@@ -337,30 +311,22 @@ const PatientDashboard = () => {
                         <div style={S.statLabel}>Est. Wait</div>
                       </div>
                       <div style={S.statDivider} />
-                      {/* Feature 3 — Estimated completion time */}
                       <div style={S.stat}>
                         <div style={{ ...S.statNum, fontSize: '16px' }}>{getEstimatedTime(appt.estimatedWait)}</div>
                         <div style={S.statLabel}>Your Turn</div>
                       </div>
                     </div>
-
                     <div style={S.actionRow}>
                       <button style={S.cancelBtn} disabled={cancelLoading === appt._id} onClick={() => setConfirmCancel(appt._id)}>
                         {cancelLoading === appt._id ? 'Cancelling...' : '✕ Cancel'}
                       </button>
-                      <button style={{ ...S.shareBtn, background: copied ? '#f0fdf4' : '#fff', color: copied ? '#16a34a' : '#1d4ed8', borderColor: copied ? '#86efac' : '#bfdbfe' }}
-                        onClick={() => handleCopyLink(appt.tokenNumber)}>
-                        {copied ? '✅ Copied!' : '📤 Share Link'}
+                      <button style={{ ...S.shareBtn, background: copiedId === appt._id ? '#f0fdf4' : '#fff', color: copiedId === appt._id ? '#16a34a' : '#1d4ed8', borderColor: copiedId === appt._id ? '#86efac' : '#bfdbfe' }}
+                        onClick={() => handleCopyLink(appt._id, appt.tokenNumber)}>
+                        {copiedId === appt._id ? '✅ Copied!' : '📤 Share Link'}
                       </button>
-                      {/* Feature 11 — QR Code */}
-                      {/* Step Away — only when WAITING and in top 3 */}
                       {appt.queuePosition <= 3 && (
                         <button
-                          style={{
-                            ...S.stepAwayBtn,
-                            opacity: appt.stepAwayCount >= 2 ? 0.4 : 1,
-                            cursor: appt.stepAwayCount >= 2 ? 'not-allowed' : 'pointer',
-                          }}
+                          style={{ ...S.stepAwayBtn, opacity: appt.stepAwayCount >= 2 ? 0.4 : 1, cursor: appt.stepAwayCount >= 2 ? 'not-allowed' : 'pointer' }}
                           disabled={appt.stepAwayCount >= 2 || stepAwayLoading === appt._id}
                           onClick={() => handleStepAway(appt)}
                           title={appt.stepAwayCount >= 2 ? 'Step away limit reached (2/2)' : 'Temporarily pause your position'}>
@@ -371,7 +337,6 @@ const PatientDashboard = () => {
                         {showQR === appt._id ? '✕ QR' : '📱 QR Code'}
                       </button>
                     </div>
-
                     {showQR === appt._id && (
                       <div style={S.qrBox}>
                         <QRCode value={trackUrl} size={120} />
@@ -380,43 +345,77 @@ const PatientDashboard = () => {
                     )}
                   </div>
                 )}
-
+ 
+                {/* IN_CONSULTATION — share + QR only, no cancel */}
                 {appt.status === 'IN_CONSULTATION' && (
-                  <div style={S.inConsultRow}>🩺 You are currently with the doctor</div>
-                )}
-
-                {appt.status === 'ON_HOLD' && appt.onHoldAtDepartment && (
-                  <div style={{ ...S.inConsultRow, background: '#f5f3ff', color: '#7c3aed', borderTop: '1px solid #ddd6fe' }}>
-                    ⏸ Your appointment is on hold — you are in consultation at <strong>{appt.onHoldAtDepartment}</strong>. Your position is preserved and will resume automatically when done.
-                  </div>
-                )}
-
-                {appt.status === 'ON_HOLD' && !appt.onHoldAtDepartment && (
-                  <div style={{ ...S.inConsultRow, background: '#fff7ed', color: '#c2410c', borderTop: '1px solid #fed7aa' }}>
-                    <div style={{ marginBottom: '10px' }}>
-                      ⏭ You were skipped — your position is paused. Return to the waiting area and notify the doctor.
+                  <>
+                    <div style={S.inConsultRow}>🩺 You are currently with the doctor</div>
+                    <div style={{ padding: '10px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button style={{ ...S.shareBtn, background: copiedId === appt._id ? '#f0fdf4' : '#fff', color: copiedId === appt._id ? '#16a34a' : '#1d4ed8', borderColor: copiedId === appt._id ? '#86efac' : '#bfdbfe' }}
+                        onClick={() => handleCopyLink(appt._id, appt.tokenNumber)}>
+                        {copiedId === appt._id ? '✅ Copied!' : '📤 Share Link'}
+                      </button>
+                      <button style={S.qrBtn} onClick={() => setShowQR(showQR === appt._id ? null : appt._id)}>
+                        {showQR === appt._id ? '✕ QR' : '📱 QR Code'}
+                      </button>
                     </div>
-                    {notifiedReturn[appt._id] ? (
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#16a34a' }}>
-                        ✅ Doctor has been notified — please wait to be called
+                    {showQR === appt._id && (
+                      <div style={S.qrBox}>
+                        <QRCode value={trackUrl} size={120} />
+                        <div style={S.qrText}>Scan to track your queue position</div>
+                      </div>
+                    )}
+                  </>
+                )}
+ 
+                {/* ON_HOLD — cancel + share + QR + info message */}
+                {appt.status === 'ON_HOLD' && (
+                  <>
+                    <div style={{ padding: '10px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button style={S.cancelBtn} disabled={cancelLoading === appt._id} onClick={() => setConfirmCancel(appt._id)}>
+                        {cancelLoading === appt._id ? 'Cancelling...' : '✕ Cancel'}
+                      </button>
+                      <button style={{ ...S.shareBtn, background: copiedId === appt._id ? '#f0fdf4' : '#fff', color: copiedId === appt._id ? '#16a34a' : '#1d4ed8', borderColor: copiedId === appt._id ? '#86efac' : '#bfdbfe' }}
+                        onClick={() => handleCopyLink(appt._id, appt.tokenNumber)}>
+                        {copiedId === appt._id ? '✅ Copied!' : '📤 Share Link'}
+                      </button>
+                      <button style={S.qrBtn} onClick={() => setShowQR(showQR === appt._id ? null : appt._id)}>
+                        {showQR === appt._id ? '✕ QR' : '📱 QR Code'}
+                      </button>
+                    </div>
+                    {showQR === appt._id && (
+                      <div style={S.qrBox}>
+                        <QRCode value={trackUrl} size={120} />
+                        <div style={S.qrText}>Scan to track your queue position</div>
+                      </div>
+                    )}
+                    {appt.onHoldAtDepartment ? (
+                      <div style={{ ...S.inConsultRow, background: '#f5f3ff', color: '#7c3aed', borderTop: '1px solid #ddd6fe' }}>
+                        ⏸ On hold — in consultation at <strong>{appt.onHoldAtDepartment}</strong>. Position preserved.
                       </div>
                     ) : (
-                      <button
-                        style={{ padding: '8px 18px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
-                        onClick={() => handleNotifyReturn(appt)}>
-                        🔔 I'm back — notify doctor
-                      </button>
+                      <div style={{ ...S.inConsultRow, background: '#fff7ed', color: '#c2410c', borderTop: '1px solid #fed7aa' }}>
+                        <div style={{ marginBottom: '10px' }}>⏭ You were skipped — return to waiting area and notify the doctor.</div>
+                        {notifiedReturn[appt._id] ? (
+                          <div style={{ fontSize: '13px', fontWeight: '600', color: '#16a34a' }}>✅ Doctor has been notified — please wait to be called</div>
+                        ) : (
+                          <button style={{ padding: '8px 18px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                            onClick={() => handleNotifyReturn(appt)}>
+                            🔔 I'm back — notify doctor
+                          </button>
+                        )}
+                      </div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
             );
           })}
         </div>
       )}
-
+ 
       {/* Registration form */}
-      {showForm && !hasActive && (
+      {showForm && (
         <div style={S.formCard}>
           <div style={S.formHeader}>
             <div style={S.formTitle}>New Appointment</div>
@@ -425,25 +424,34 @@ const PatientDashboard = () => {
           <form onSubmit={handleRegister}>
             <div style={S.formFieldFull}>
               <label style={S.label}>Department</label>
-              {/* Feature 4 — Department busy indicator */}
               <div style={S.deptGrid}>
                 {DEPARTMENTS.map(d => {
                   const busy = getBusyLabel(deptLoads[d] || 0);
+                  const alreadyBooked = !!activeDeptAppts[d];
                   return (
                     <div key={d}
-                      style={{ ...S.deptOption, ...(form.department === d ? S.deptSelected : {}), borderColor: form.department === d ? '#1d4ed8' : '#e2e8f0' }}
-                      onClick={() => handleDeptChange(d)}>
+                      style={{
+                        ...S.deptOption,
+                        ...(form.department === d ? S.deptSelected : {}),
+                        ...(alreadyBooked ? { opacity: 0.45, cursor: 'not-allowed', background: '#f1f5f9' } : {}),
+                        borderColor: form.department === d ? '#1d4ed8' : alreadyBooked ? '#e2e8f0' : '#e2e8f0',
+                      }}
+                      onClick={() => !alreadyBooked && handleDeptChange(d)}>
                       <div style={S.deptOptionName}>{d}</div>
-                      <div style={{ ...S.deptBusy, background: busy.bg, color: busy.color }}>{busy.label}</div>
+                      {alreadyBooked
+                        ? <div style={{ ...S.deptBusy, background: '#e2e8f0', color: '#94a3b8' }}>
+                            Already booked ({activeDeptAppts[d].tokenNumber})
+                          </div>
+                        : <div style={{ ...S.deptBusy, background: busy.bg, color: busy.color }}>{busy.label}</div>
+                      }
                     </div>
                   );
                 })}
               </div>
             </div>
-
+ 
             {form.department && (
               <>
-                {/* Feature 10 — Auto-assign toggle */}
                 <div style={S.formFieldFull}>
                   <div style={S.autoAssignRow}>
                     <div>
@@ -456,7 +464,6 @@ const PatientDashboard = () => {
                     </div>
                   </div>
                 </div>
-
                 {!form.autoAssign && (
                   <div style={S.formField}>
                     <label style={S.label}>Doctor</label>
@@ -468,7 +475,7 @@ const PatientDashboard = () => {
                 )}
               </>
             )}
-
+ 
             <div style={S.formFieldFull}>
               <label style={S.label}>Priority Level</label>
               <div style={S.priorityGrid}>
@@ -482,7 +489,7 @@ const PatientDashboard = () => {
                 ))}
               </div>
             </div>
-
+ 
             {form.priority !== 3 && (
               <div style={S.formFieldFull}>
                 <label style={S.label}>Priority Reason <span style={{ color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>(optional)</span></label>
@@ -490,21 +497,21 @@ const PatientDashboard = () => {
                   value={form.priorityReason} onChange={e => setForm({ ...form, priorityReason: e.target.value })} />
               </div>
             )}
-
+ 
             <div style={S.formFieldFull}>
               <label style={S.label}>Symptoms <span style={{ color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>(optional)</span></label>
               <textarea style={{ ...S.input, height: '80px', resize: 'vertical' }}
                 value={form.symptoms} onChange={e => setForm({ ...form, symptoms: e.target.value })}
                 placeholder="Briefly describe your symptoms..." />
             </div>
-
+ 
             <button style={{ ...S.submitBtn, opacity: loading ? 0.75 : 1 }} type="submit" disabled={loading}>
               {loading ? 'Registering...' : form.autoAssign ? '🎫 Auto-Assign & Get Token' : '🎫 Get My Token'}
             </button>
           </form>
         </div>
       )}
-
+ 
       {activeAppts.length === 0 && !showForm && (
         <div style={S.emptyState}>
           <div style={S.emptyEmoji}>🏥</div>
@@ -512,8 +519,8 @@ const PatientDashboard = () => {
           <div style={S.emptySub}>Click "New Appointment" to join a queue and get your token</div>
         </div>
       )}
-
-      {/* Past appointments with rating */}
+ 
+      {/* Past appointments */}
       {pastAppts.length > 0 && (
         <div style={S.section}>
           <div style={S.sectionTitle}>Past Appointments</div>
@@ -531,7 +538,6 @@ const PatientDashboard = () => {
                   <span style={S.pastCell}>{appt.department}</span>
                   <span style={S.pastCell}>Dr. {appt.doctor?.name}</span>
                   <span style={{ ...S.pastBadge, background: s.bg + '20', color: s.bg }}>{s.label}</span>
-                  {/* Feature 8 — Rating */}
                   <span>
                     {appt.status === 'DONE' ? (
                       alreadyRated ? (
@@ -547,7 +553,7 @@ const PatientDashboard = () => {
           </div>
         </div>
       )}
-
+ 
       {/* Cancel dialog */}
       {confirmCancel && (
         <div style={S.overlay}>
@@ -565,7 +571,7 @@ const PatientDashboard = () => {
     </div>
   );
 };
-
+ 
 const S = {
   page:           { maxWidth: '860px', margin: '0 auto', padding: '32px 24px' },
   pageHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' },
@@ -576,13 +582,13 @@ const S = {
   disabledIcon:   { fontSize: '20px' },
   disabledTitle:  { fontSize: '13px', fontWeight: '600', color: '#dc2626' },
   disabledSub:    { fontSize: '12px', color: '#f87171', marginTop: '1px' },
-  emergencyBanner:{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '14px', fontWeight: '600', color: '#dc2626', animation: 'pulse 1s ease-in-out' },
+  emergencyBanner:{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '14px', fontWeight: '600', color: '#dc2626' },
   errorBanner:    { display: 'flex', alignItems: 'center', gap: '10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '12px', marginBottom: '20px', fontSize: '13px', fontWeight: '500' },
   section:        { marginBottom: '28px' },
   sectionHeader:  { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' },
   sectionTitle:   { fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px' },
   liveBadge:      { display: 'flex', alignItems: 'center', gap: '5px', background: '#fef2f2', color: '#dc2626', padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' },
-  liveDot:        { width: '5px', height: '5px', borderRadius: '50%', background: '#dc2626', display: 'inline-block', animation: 'pulse 1.5s infinite' },
+  liveDot:        { width: '5px', height: '5px', borderRadius: '50%', background: '#dc2626', display: 'inline-block' },
   activeCard:     { background: '#fff', border: '1.5px solid', borderRadius: '14px', overflow: 'hidden', marginBottom: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
   activeCardHeader:{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' },
   tokenArea:      {},
@@ -603,7 +609,7 @@ const S = {
   shareBtn:       { padding: '8px 16px', border: '1px solid', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' },
   qrBtn:          { padding: '8px 16px', background: '#fff', color: '#6366f1', border: '1px solid #c7d2fe', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' },
   stepAwayBtn:    { padding: '8px 16px', background: '#fff', color: '#f59e0b', border: '1px solid #fcd34d', borderRadius: '8px', fontSize: '13px', fontWeight: '500' },
-  qrBox:          { marginTop: '12px', display: 'flex', alignItems: 'center', gap: '16px', background: '#f8fafc', borderRadius: '10px', padding: '16px', border: '1px solid #e2e8f0' },
+  qrBox:          { margin: '0 16px 12px', display: 'flex', alignItems: 'center', gap: '16px', background: '#f8fafc', borderRadius: '10px', padding: '16px', border: '1px solid #e2e8f0' },
   qrText:         { fontSize: '12px', color: '#64748b' },
   inConsultRow:   { padding: '14px 20px', background: '#eff6ff', color: '#1d4ed8', fontWeight: '600', fontSize: '14px', borderTop: '1px solid #dbeafe' },
   formCard:       { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '28px', marginBottom: '28px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
@@ -648,5 +654,5 @@ const S = {
   dialogBtnNo:    { flex: 1, padding: '12px', background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px', fontWeight: '600' },
   dialogBtnYes:   { flex: 1, padding: '12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' },
 };
-
+ 
 export default PatientDashboard;

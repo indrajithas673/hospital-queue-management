@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import api from '../utils/api';
 import socket from '../utils/socket';
 
 const DEPARTMENTS = ['General', 'Cardiology', 'Orthopedics', 'Neurology', 'Pediatrics', 'ENT'];
@@ -17,10 +16,12 @@ const WaitingRoomDisplay = () => {
   const [time, setTime]     = useState(new Date());
   const [loading, setLoading] = useState(true);
 
+  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
   const fetchQueue = async () => {
     try {
-      const res = await api.get(`/appointments/queue/${department}`);
-      setQueue(res.data.data.queue);
+      const res = await fetch(`${BASE_URL}/appointments/display/${department}`);
+      const json = await res.json();
+      setQueue(json.data.queue);
     } catch (err) { console.error(err.message); }
     finally { setLoading(false); }
   };

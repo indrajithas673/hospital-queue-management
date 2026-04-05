@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import api from '../utils/api';
 import socket from '../utils/socket';
 
 const STATUS = {
@@ -25,14 +24,17 @@ const TrackToken = () => {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [copied, setCopied] = useState(false);
 
+  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
   const fetchToken = async () => {
     try {
-      const res = await api.get(`/appointments/track/${tokenNumber}`);
-      setData(res.data.data);
+      const res = await fetch(`${BASE_URL}/appointments/track/${tokenNumber}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message);
+      setData(json.data);
       setLastUpdated(new Date());
       setError('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Token not found.');
+      setError(err.message || 'Token not found.');
     } finally {
       setLoading(false);
     }

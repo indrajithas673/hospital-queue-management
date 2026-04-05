@@ -65,13 +65,9 @@ const appointmentSchema = new mongoose.Schema(
     doctorNotes:           { type: String, trim: true },  // Doctor notes — visible to admin only
     patientRating:         { type: Number, min: 1, max: 5 },
 
-    // Notification flags — so we don't send duplicate alerts
-    notifiedAt3: { type: Boolean, default: false }, // notified when 3 ahead
-    notifiedAt1: { type: Boolean, default: false }, // notified when next
-
-    // Notification flags — so we don't send duplicate alerts
-    notifiedAt3: { type: Boolean, default: false },  // notified when 3 ahead
-    notifiedAt1: { type: Boolean, default: false },  // notified when next
+    // Notification flags — prevent duplicate email/SMS alerts
+    notifiedAt3: { type: Boolean, default: false }, // notified when 3rd in queue
+    notifiedAt1: { type: Boolean, default: false }, // notified when next in queue
 
     // Attack 11 — Step Away abuse: minimum hold time
     // Attack 21 — One Step Away at a time

@@ -60,22 +60,25 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 
 // Check if account is locked
 userSchema.methods.isLocked = function () {
-  return this.lockUntil && this.lockUntil > Date.now();
+  return !!(this.lockUntil && this.lockUntil.getTime() > Date.now());
 };
 
 // Increment failed login attempts
 userSchema.methods.incLoginAttempts = async function () {
   const MAX_ATTEMPTS = 5;
-  const LOCK_TIME    = 15 * 60 * 1000; // 15 minutes
+  const LOCK_TIME    = 15 * 60 * 1000;
 
   this.loginAttempts += 1;
 
   if (this.loginAttempts >= MAX_ATTEMPTS) {
     this.lockUntil     = new Date(Date.now() + LOCK_TIME);
-    this.loginAttempts = 0; // reset after locking
+    this.loginAttempts = 0;
+    await this.save();
+    return true; // just locked
   }
 
   await this.save();
+  return false; // not locked yet
 };
 
 // Reset login attempts on successful login

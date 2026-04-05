@@ -311,6 +311,39 @@ const AdminPanel = () => {
             </div>
           )}
 
+          {/* NO_SHOW Rate Monitor */}
+          <div style={{ ...S.sectionTitle, marginTop: '28px' }}>NO_SHOW Rate Monitor</div>
+          <div style={S.tableWrap}>
+            <table style={S.table}>
+              <thead>
+                <tr>{['Doctor','Department','Total','No Shows','Rate','Status'].map(h => <th key={h} style={S.th}>{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {noShowRates.length === 0
+                  ? <tr><td colSpan={6} style={{ ...S.td, textAlign: 'center', color: '#94a3b8', padding: '28px' }}>No data yet</td></tr>
+                  : noShowRates.map(d => (
+                    <tr key={d._id}>
+                      <td style={S.td}><strong>Dr. {d.doctorName}</strong></td>
+                      <td style={S.td}>{d.department}</td>
+                      <td style={S.td}>{d.total}</td>
+                      <td style={{ ...S.td, color: '#dc2626', fontWeight: '600' }}>{d.noShows}</td>
+                      <td style={{ ...S.td, fontWeight: '700', color: d.flagged ? '#dc2626' : '#16a34a' }}>{d.noShowRate}%</td>
+                      <td style={S.td}>
+                        {d.flagged
+                          ? <span style={{ background: '#fef2f2', color: '#dc2626', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>🚨 FLAGGED</span>
+                          : <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>✓ OK</span>
+                        }
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+            <div style={{ padding: '8px 14px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', fontSize: '11px', color: '#94a3b8' }}>
+              🚨 Flagged when NO_SHOW rate exceeds 30% — possible doctor collusion (Attack 12)
+            </div>
+          </div>
+
           {/* Peak Hours */}
           <div style={{ ...S.sectionTitle, marginTop: '28px' }}>
             Peak Hours

@@ -9,7 +9,8 @@ const Register = () => {
   const [form, setForm]         = useState({ name: '', email: '', password: '', phone: '', role: 'patient', department: '' });
   const [error, setError]       = useState('');
   const [showPass, setShowPass] = useState(false);
-  const { register, loading }   = useAuth();
+  const { register}   = useAuth();
+  const [loading, setLoading] = useState(false);
   const navigate                = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -17,7 +18,9 @@ const Register = () => {
     setError('');
     const errors = validateRegisterForm(form);
     if (errors.length > 0) { setError(errors[0]); return; }
+    setLoading(true);
     const result = await register(form);
+    setLoading(false);
     if (result.success) navigate('/patient');
     else setError(result.message);
   };

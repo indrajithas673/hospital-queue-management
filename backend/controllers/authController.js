@@ -49,13 +49,20 @@ const login = async (req, res) => {
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      await user.incLoginAttempts();
-      const attemptsLeft = 5 - user.loginAttempts;
+      const attemptsBefore = user.loginAttempts;
+      const justLocked = await user.incLoginAttempts();
+
+      if (justLocked) {
+        return res.status(403).json({
+          success: false,
+          message: 'Account locked for 15 minutes due to too many failed attempts.',
+        });
+      }
+
+      const attemptsLeft = Math.max(0, 5 - (attemptsBefore + 1));
       return res.status(401).json({
         success: false,
-        message: attemptsLeft > 0
-          ? `Invalid email or password. ${attemptsLeft} attempt(s) remaining.`
-          : 'Account locked for 15 minutes due to too many failed attempts.',
+        message: `Invalid email or password. ${attemptsLeft} attempt(s) remaining.`,
       });
     }
 
